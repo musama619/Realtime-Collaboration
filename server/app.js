@@ -4,27 +4,30 @@ const io = require("socket.io")(8000, {
     },
 });
 
-const users = {};
+const users = [];
+var session = [];
 
 io.on("connection", (socket) => {
-    socket.on("new-user-joined", (name) => {
-        console.log(name);
-        users[socket.id] = name;
-        socket.broadcast.emit("user-joined", name);
-    });
-
-    socket.on("send", (message) => {
-        socket.broadcast.emit("receive", {
-            message: message,
-            name: users[socket.id],
-        });
-    });
-
     socket.on("message", (data) => {
-        socket.broadcast.emit("new-data", {
+        socket.in(data.session).emit("new-data", {
             message: data.text,
             name: users[socket.id],
         });
+    });
+
+    socket.on("create-session", (sessionName) => {
+        session.push({ name: sessionName, users: [socket.id] });
+        socket.join(sessionName);
+        io.to(sessionName).emit("user-joined", { user: socket.id });
+    });
+
+    socket.on("join-session", (sessionName) => {
+        if (session.find((r) => r.name === sessionName)) {
+            socket.join(sessionName);
+            io.to(sessionName).emit("user-joined", { user: socket.id });
+        } else {
+            socket.emit("session-not-exists")
+        }
     });
 
     socket.on("disconnect", (message) => {
